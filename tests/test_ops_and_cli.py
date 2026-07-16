@@ -79,3 +79,23 @@ def test_cli_create_and_view(tmp_path, capsys):
     capsys.readouterr()
     assert cli.main(["--human", "view", path, "--as", "outline"]) == 0
     assert "One" in capsys.readouterr().out
+
+
+def test_skill_install_and_path(tmp_path):
+    from numbers_cli import skill
+
+    src = skill.bundled_skill_dir()
+    assert (src / "SKILL.md").exists()
+
+    target = skill.install(dest_root=tmp_path)
+    assert target == tmp_path / "apple-numbers"
+    assert (target / "SKILL.md").exists()
+    assert (target / "references" / "command-reference.md").exists()
+    assert not (target / "__init__.py").exists()
+
+    import pytest
+    from numbers_cli.errors import UsageError
+
+    with pytest.raises(UsageError):
+        skill.install(dest_root=tmp_path)  # refuses to overwrite
+    skill.install(dest_root=tmp_path, force=True)  # unless forced

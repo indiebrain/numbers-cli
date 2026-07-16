@@ -132,6 +132,16 @@ def cmd_doctor(args: argparse.Namespace) -> Any:
     }
 
 
+def cmd_skill(args: argparse.Namespace) -> Any:
+    from . import skill
+
+    if args.skill_action == "path":
+        return {"skill": str(skill.bundled_skill_dir())}
+    # install
+    target = skill.install(dest_root=args.dir, force=args.force)
+    return {"installed": str(target), "reload": "Restart Claude Code to load the skill"}
+
+
 def _parser_version() -> str:
     try:
         import numbers_parser
@@ -236,6 +246,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("mcp", help="run the MCP server over stdio")
     p.set_defaults(func=cmd_mcp)
+
+    p = sub.add_parser("skill", help="install the bundled Claude Code skill, or show its path")
+    p.add_argument(
+        "skill_action",
+        nargs="?",
+        default="install",
+        choices=["install", "path"],
+        help="install (default) copies the skill into a skills directory; path prints its source",
+    )
+    p.add_argument("--dir", help="skills directory to install into (default: ~/.claude/skills)")
+    p.add_argument("--force", action="store_true", help="overwrite an existing installed skill")
+    p.set_defaults(func=cmd_skill)
 
     return parser
 
