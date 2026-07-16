@@ -95,4 +95,6 @@ Plus `batch` (an operation list applied in one pass), `merge` (fill
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE).
+GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later). See
+[COPYING.LESSER](COPYING.LESSER) (the LGPLv3 additional permissions) and
+[COPYING](COPYING) (the GPLv3 base license).
