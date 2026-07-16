@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "numbers-cli"
+version = "0.1.0"
+description = "An OfficeCli-style command line and MCP server for Apple Numbers spreadsheets"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Aaron Kuehler" }]
+keywords = ["apple", "numbers", "spreadsheet", "cli", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "numbers-parser>=4.18",
+]
+
+[project.optional-dependencies]
+# The Model Context Protocol server is optional: it pulls in a large dependency
+# tree (pydantic, starlette, uvicorn, ...). Install with `pip install
+# 'numbers-cli[mcp]'` to enable `nmbr mcp`.
+mcp = ["mcp>=1.0"]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/indiebrain/numbers-cli"
+Repository = "https://github.com/indiebrain/numbers-cli"
+
+[project.scripts]
+nmbr = "numbers_cli.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+numbers_cli = ["jxa/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
