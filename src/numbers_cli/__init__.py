@@ -14,4 +14,11 @@ The package is organised in the same layered way OfficeCli exposes Office files:
   round trip when an edit touches a formula.
 """
 
-__version__ = "0.1.0"
+# Derive the version from the installed distribution metadata so it never drifts
+# from pyproject.toml. Falls back when running from an uninstalled source tree.
+from importlib.metadata import PackageNotFoundError, version as _version
+
+try:
+    __version__ = _version("numbers-cli")
+except PackageNotFoundError:  # pragma: no cover - source checkout without install
+    __version__ = "0.0.0+dev"
