@@ -26,22 +26,70 @@ from ..errors import EngineUnavailable, NumbersCliError
 _JXA = Path(__file__).resolve().parent.parent / "jxa" / "numbers_ops.js"
 
 
-def numbers_app_path() -> str | None:
-    """Return the path to Numbers.app, or ``None`` if it is not installed."""
-    fixed = Path("/Applications/Numbers.app")
-    if fixed.exists():
-        return str(fixed)
+# Numbers has shipped under more than one bundle identifier over the years, and
+# managed or re-signed installs (for example an MDM-deployed build) can rename
+# the application on disk. Detection therefore tries several signals rather than
+# a single hard-coded path.
+_BUNDLE_IDS = ("com.apple.Numbers", "com.apple.iWork.Numbers")
+
+
+def _mdfind_bundle(bundle_id: str) -> str | None:
+    """Ask Spotlight for the app with ``bundle_id``. ``None`` if unindexed."""
     try:
         out = subprocess.run(
-            ["mdfind", "kMDItemCFBundleIdentifier == 'com.apple.iWork.Numbers'"],
+            ["mdfind", f"kMDItemCFBundleIdentifier == '{bundle_id}'"],
             capture_output=True,
             text=True,
             timeout=10,
         )
-        first = out.stdout.strip().splitlines()
-        return first[0] if first else None
     except (OSError, subprocess.SubprocessError):
         return None
+    lines = out.stdout.strip().splitlines()
+    return lines[0] if lines else None
+
+
+def _launch_services_path(name: str) -> str | None:
+    """Resolve an app by name through LaunchServices, via ``osascript``.
+
+    This is the authoritative signal: it mirrors how the automation script
+    reaches the app (``Application("Numbers")``), so if this resolves a path the
+    engine will work. It also succeeds when the app has been renamed on disk or
+    when Spotlight is disabled, both of which defeat the path and ``mdfind``
+    checks.
+    """
+    if shutil.which("osascript") is None:
+        return None
+    try:
+        out = subprocess.run(
+            ["osascript", "-e", f'POSIX path of (path to application "{name}")'],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    path = out.stdout.strip()
+    return path if out.returncode == 0 and path else None
+
+
+def numbers_app_path() -> str | None:
+    """Return the path to the Numbers application, or ``None`` if not installed."""
+    # 1. The standard install location: cheap and covers the common case.
+    fixed = Path("/Applications/Numbers.app")
+    if fixed.exists():
+        return str(fixed)
+    # 2. LaunchServices, which resolves renamed installs and does not need
+    #    Spotlight. This is what the automation actually drives, so a hit here
+    #    means the engine will work.
+    resolved = _launch_services_path("Numbers")
+    if resolved:
+        return resolved
+    # 3. Spotlight, for any known bundle identifier, as a final fallback.
+    for bundle_id in _BUNDLE_IDS:
+        hit = _mdfind_bundle(bundle_id)
+        if hit:
+            return hit
+    return None
 
 
 def available() -> bool:
