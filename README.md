@@ -45,6 +45,21 @@ pipx install 'git+https://github.com/indiebrain/numbers-cli'          # core com
 pipx install 'numbers-cli[mcp] @ git+https://github.com/indiebrain/numbers-cli'  # also enable the MCP server
 ```
 
+## Claude Code skill
+
+A [Claude Code](https://claude.com/claude-code) skill ships with the tool. Install
+it into your skills directory so Claude Code can drive `nmbr` for you:
+
+```bash
+nmbr skill install            # copies the skill into ~/.claude/skills/apple-numbers
+nmbr skill install --dir DIR  # or into a directory you choose
+nmbr skill path               # print where the bundled skill lives
+```
+
+Restart Claude Code afterward to load it. The skill is installed at command time
+(not during `brew install`, which runs in a sandbox that cannot write to your home
+directory).
+
 ## The MCP server is optional
 
 The Model Context Protocol server pulls in a large dependency tree (pydantic,
