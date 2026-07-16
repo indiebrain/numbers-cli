@@ -30,7 +30,10 @@ function setOne(doc, edit) {
   const table = edit.table != null ? sheet.tables[edit.table] : sheet.tables[0];
   const cell = table.cells.byName(edit.a1);
   cell.value = edit.value;
-  return { a1: edit.a1, value: String(cell.value), formula: cell.formula() };
+  // Read the value back with the accessor call: `cell.value` is a specifier, and
+  // String() on a specifier throws "Can't convert types" on recent Numbers
+  // (seen on 15.2), which would abort every formula write.
+  return { a1: edit.a1, value: String(cell.value()), formula: cell.formula() };
 }
 
 function opSet(app, input) {
