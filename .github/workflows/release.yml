@@ -1,0 +1,31 @@
+name: release
+
+# On a version tag (v0.1.0), build the source and wheel distributions and
+# publish a GitHub release with them attached. Homebrew installs from the tag's
+# source tarball; the built artifacts are provided for pip users and for anyone
+# regenerating the tap's vendored resources.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build distributions
+        run: |
+          pip install build
+          python -m build
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
