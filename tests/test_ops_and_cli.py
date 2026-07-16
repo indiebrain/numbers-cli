@@ -3,6 +3,7 @@ import json
 import pytest
 
 from numbers_cli import cli
+from numbers_cli.engine import app_engine
 from numbers_cli.engine import parser_engine as pe
 from numbers_cli.errors import EngineUnavailable
 from numbers_cli.layers import l2_dom
@@ -51,12 +52,16 @@ def test_merge_typed_and_missing(doc_path, tmp_path):
     assert l2_dom.get(reopened, "/sheet[1]/table[1]/cell[A2]")["value"] == 42.0
 
 
-def test_formula_without_numbers_raises(doc_path):
+def test_formula_without_numbers_raises(doc_path, monkeypatch):
+    # Force the Numbers application to look absent so the assertion holds on any
+    # host, including one where the application is installed and detectable.
+    monkeypatch.setattr(app_engine, "numbers_app_path", lambda: None)
     with pytest.raises(EngineUnavailable):
         set_cells(doc_path, [("/sheet[1]/table[1]/cell[C1]", "=A1+B2")])
 
 
-def test_formula_as_text_warns(doc_path):
+def test_formula_as_text_warns(doc_path, monkeypatch):
+    monkeypatch.setattr(app_engine, "numbers_app_path", lambda: None)
     summary = set_cells(doc_path, [("/sheet[1]/table[1]/cell[C1]", "=A1+B2")], allow_text_formula=True)
     assert summary["warnings"]
     reopened = pe.open_document(doc_path)
