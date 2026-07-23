@@ -79,7 +79,7 @@ first sheet, while `sheet['1']` is the sheet literally named `1`.
 | `nmbr raw <file> [--id N] [--grep TYPE]` | Inspect the protocol buffer objects (L3, read) | parser |
 | `nmbr recalc <file>` | Recalculate formulas and save | application |
 | `nmbr export <file> --to csv\|xlsx\|pdf [--out ...]` | Native export | application |
-| `nmbr doctor` | Report versions and engine availability | - |
+| `nmbr doctor [--probe]` | Report versions and engine availability; `--probe` drives Numbers end to end | - |
 | `nmbr mcp` | Run the MCP server over stdio | - |
 
 Full detail: `references/command-reference.md`.
@@ -90,6 +90,11 @@ Full detail: `references/command-reference.md`.
    indiebrain/numbers && brew install numbers-cli; }`, then `nmbr doctor`. Note
    whether `app_engine_available` is true; if it is false, avoid `recalc`,
    `export`, and formula writes, or expect a clear `ENGINE_UNAVAILABLE` error.
+   `numbers_app_info` shows which app resolved (name, version, bundle id) - Apple
+   ships Numbers under more than one display name. `app_engine_available` only
+   means the app *resolves*, not that automation works; to confirm the round trip
+   for real (it launches Numbers), run `nmbr doctor --probe` and check
+   `app_engine_healthy`.
 2. **Orient before editing.** Use `nmbr view <file> --as outline` to see sheets
    and tables, then `nmbr view <file> <table-path> --as csv` or `nmbr query` to
    find the cells you care about.

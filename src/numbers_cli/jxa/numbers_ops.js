@@ -9,17 +9,68 @@
 // This file only runs on macOS with Numbers installed. app_engine checks for the
 // application first and never calls in when it is missing.
 
+ObjC.import("Foundation");
+
+// Sleep without StandardAdditions: the global `delay` is not dependable from a
+// script file and `Application(...).delay` is not understood by app objects, so
+// use the Foundation bridge, which works regardless of the host application.
+function sleep(seconds) {
+  $.NSThread.sleepForTimeInterval(seconds);
+}
+
 function readInput(argv) {
   if (!argv || argv.length === 0) throw new Error("missing JSON argument");
   return JSON.parse(argv[0]);
 }
 
+function basename(p) {
+  const i = String(p).lastIndexOf("/");
+  return i >= 0 ? String(p).slice(i + 1) : String(p);
+}
+
+// Resolve the open document by matching its name (or file path) against the
+// requested file. app.open() cannot be trusted to return the document -- on some
+// Numbers builds (seen on 15.3) it returns null even though the file opens -- so
+// we look it up in app.documents instead. Matching by name also avoids grabbing
+// an unrelated window that happened to be frontmost.
+function findOpenDoc(app, file) {
+  const want = basename(file);
+  const wantNoExt = want.replace(/\.numbers$/i, "");
+  const docs = app.documents;
+  for (let i = 0; i < docs.length; i++) {
+    const doc = docs[i];
+    let name = null;
+    try { name = doc.name(); } catch (e) {}
+    if (name && (name === want || name === wantNoExt)) return doc;
+    let path = null;
+    try { path = String(doc.file()); } catch (e) {}
+    if (path && path.indexOf(want) !== -1) return doc;
+  }
+  return null;
+}
+
 function withDocument(app, file, fn) {
-  const doc = app.open(Path(file));
+  // Never rely on app.open()'s return value (null on some builds). Open, then
+  // resolve the document from app.documents, polling briefly for the window to
+  // appear before giving up.
+  app.open(Path(file));
+  let doc = null;
+  for (let i = 0; i < 50 && doc === null; i++) {
+    doc = findOpenDoc(app, file);
+    if (doc === null) sleep(0.1);
+  }
+  if (doc === null) {
+    throw new Error("Numbers did not open the document: " + file);
+  }
   try {
     return fn(doc);
   } finally {
-    doc.close({ saving: "no" });
+    try {
+      doc.close({ saving: "no" });
+    } catch (e) {
+      // Closing is best effort: never let a close failure mask the real result
+      // or error from fn (a null-doc close was the original masking bug).
+    }
   }
 }
 
@@ -51,8 +102,11 @@ function opRecalc(app, input) {
   return withDocument(app, input.file, function (doc) {
     const table = doc.sheets[0].tables[0];
     const anchor = table.cells.byName("A1");
-    const keep = anchor.value;
-    anchor.value = keep; // no-op write to trigger recalculation
+    // Materialize the value with the accessor call before writing it back:
+    // `anchor.value` is a specifier, so `anchor.value = anchor.value` assigns a
+    // specifier rather than a concrete value and does not reliably dirty the
+    // document. `anchor.value()` returns the actual value.
+    anchor.value = anchor.value(); // no-op write to trigger recalculation
     doc.save();
     return { ok: true, op: "recalc" };
   });

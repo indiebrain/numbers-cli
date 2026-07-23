@@ -124,12 +124,21 @@ def cmd_mcp(args: argparse.Namespace) -> Any:  # pragma: no cover - long running
 
 
 def cmd_doctor(args: argparse.Namespace) -> Any:
-    return {
+    report: dict[str, Any] = {
         "version": __version__,
         "numbers_parser": _parser_version(),
         "app_engine_available": app_engine.available(),
         "numbers_app": app_engine.numbers_app_path(),
+        "numbers_app_info": app_engine.numbers_app_info(),
     }
+    # `available` only proves the app resolves, not that automation works. The
+    # health probe drives Numbers for real, so it launches the app and is opt in.
+    if getattr(args, "probe", False):
+        health = app_engine.health()
+        report["app_engine_healthy"] = health.get("healthy")
+        if health.get("error"):
+            report["app_engine_error"] = health["error"]
+    return report
 
 
 def cmd_skill(args: argparse.Namespace) -> Any:
@@ -242,6 +251,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_raw)
 
     p = sub.add_parser("doctor", help="report versions and back end availability")
+    p.add_argument(
+        "--probe",
+        action="store_true",
+        help="drive Numbers end to end to confirm automation works (launches the app)",
+    )
     p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("mcp", help="run the MCP server over stdio")

@@ -150,6 +150,12 @@ Both need the Numbers application. `recalc` forces a recalculation and saves;
 ## doctor, mcp
 
 ```
-nmbr doctor          # versions and whether the application engine is available
+nmbr doctor          # versions, engine availability, and the resolved app's identity
+nmbr doctor --probe  # additionally drive Numbers end to end (launches it) and report app_engine_healthy
 nmbr mcp             # run the MCP server over stdio
 ```
+
+`app_engine_available` only proves the app resolves; `--probe` opens a throwaway
+document through the same path real operations use and reports whether it
+actually round trips (`app_engine_healthy`). `numbers_app_info` names the app
+that resolved (Apple ships Numbers under more than one display name).
