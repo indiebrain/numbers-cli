@@ -85,3 +85,77 @@ def test_available_reflects_detection(monkeypatch):
     assert ae.available() is True
     monkeypatch.setattr(ae, "numbers_app_path", lambda: None)
     assert ae.available() is False
+
+
+# --- app identity and functional health probe --------------------------------
+
+import plistlib
+from pathlib import Path
+
+from numbers_cli.errors import NumbersCliError
+
+
+def _fake_app_bundle(tmp_path, **plist):
+    app = tmp_path / "Numbers Creator Studio.app"
+    (app / "Contents").mkdir(parents=True)
+    with open(app / "Contents" / "Info.plist", "wb") as handle:
+        plistlib.dump(plist, handle)
+    return str(app)
+
+
+def test_numbers_app_info_reads_bundle_plist(tmp_path, monkeypatch):
+    app = _fake_app_bundle(
+        tmp_path,
+        CFBundleDisplayName="Numbers Creator Studio",
+        CFBundleName="Numbers",
+        CFBundleShortVersionString="15.3",
+        CFBundleIdentifier="com.apple.Numbers",
+    )
+    monkeypatch.setattr(ae, "numbers_app_path", lambda: app)
+    info = ae.numbers_app_info()
+    assert info["name"] == "Numbers Creator Studio"  # display name wins over CFBundleName
+    assert info["version"] == "15.3"
+    assert info["bundle_id"] == "com.apple.Numbers"
+    assert info["path"] == app
+
+
+def test_numbers_app_info_none_when_absent(monkeypatch):
+    monkeypatch.setattr(ae, "numbers_app_path", lambda: None)
+    assert ae.numbers_app_info() is None
+
+
+def test_health_reports_healthy_on_round_trip(monkeypatch):
+    monkeypatch.setattr(ae, "available", lambda: True)
+    monkeypatch.setattr(ae, "numbers_app_info", lambda: {"name": "Numbers", "version": "15.3"})
+    monkeypatch.setattr(
+        ae, "get_cells", lambda file, cells: {"cells": [{"a1": "A1", "value": 1}]}
+    )
+    result = ae.health()
+    assert result["healthy"] is True
+    assert "error" not in result
+    assert result["app"]["version"] == "15.3"
+
+
+def test_health_reports_unhealthy_when_engine_errors(monkeypatch):
+    monkeypatch.setattr(ae, "available", lambda: True)
+    monkeypatch.setattr(ae, "numbers_app_info", lambda: None)
+
+    def boom(file, cells):
+        raise NumbersCliError("Numbers reported an error: doc is null", code="APP_ERROR")
+
+    monkeypatch.setattr(ae, "get_cells", boom)
+    result = ae.health()
+    assert result["healthy"] is False
+    assert "doc is null" in result["error"]
+
+
+def test_health_short_circuits_when_unavailable(monkeypatch):
+    monkeypatch.setattr(ae, "available", lambda: False)
+
+    def unreachable(file, cells):
+        raise AssertionError("must not drive Numbers when it is unavailable")
+
+    monkeypatch.setattr(ae, "get_cells", unreachable)
+    result = ae.health()
+    assert result["healthy"] is False
+    assert "not detected" in result["error"]

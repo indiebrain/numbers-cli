@@ -92,6 +92,33 @@ def numbers_app_path() -> str | None:
     return None
 
 
+def numbers_app_info() -> dict[str, Any] | None:
+    """Identity of the resolved Numbers application, or ``None`` if not installed.
+
+    Reads the bundle's ``Info.plist`` directly (no application launch), so it is
+    cheap and side effect free. Surfacing the display name, version, and bundle
+    identifier makes it obvious *which* app the engine will drive - Apple has
+    shipped it under more than one name (for example "Numbers Creator Studio"
+    with bundle ``com.apple.Numbers``), which is otherwise invisible.
+    """
+    path = numbers_app_path()
+    if path is None:
+        return None
+    info: dict[str, Any] = {"path": path, "name": None, "version": None, "bundle_id": None}
+    plist = Path(path) / "Contents" / "Info.plist"
+    try:
+        import plistlib
+
+        with open(plist, "rb") as handle:
+            data = plistlib.load(handle)
+        info["name"] = data.get("CFBundleDisplayName") or data.get("CFBundleName")
+        info["version"] = data.get("CFBundleShortVersionString")
+        info["bundle_id"] = data.get("CFBundleIdentifier")
+    except (OSError, ValueError):  # unreadable or malformed plist
+        pass
+    return info
+
+
 def available() -> bool:
     """True when this machine can drive Numbers (macOS, osascript, Numbers.app)."""
     return shutil.which("osascript") is not None and numbers_app_path() is not None
@@ -173,3 +200,41 @@ def export(file: str | Path, fmt: str, out: str | Path) -> dict[str, Any]:
             "out": str(Path(out).resolve()),
         }
     )
+
+
+def health() -> dict[str, Any]:
+    """Exercise the application back end end to end and report whether it works.
+
+    :func:`available` only proves that ``osascript`` and a Numbers app *resolve*;
+    it never drives the automation, so it reports healthy even when every app
+    operation is broken (as happened when ``app.open`` began returning ``null``).
+    This probe writes a throwaway document with the parser, opens it through the
+    JXA ``get`` path - the same ``withDocument`` open that real operations use -
+    and confirms the value round trips. It launches Numbers, so it is opt in
+    (``nmbr doctor --probe``) rather than part of the default report.
+    """
+    result: dict[str, Any] = {"available": available(), "app": numbers_app_info()}
+    if not available():
+        result["healthy"] = False
+        result["error"] = "Numbers application not detected"
+        return result
+
+    import tempfile
+
+    from . import parser_engine as pe
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            probe = Path(tmp) / "numbers-cli-healthcheck.numbers"
+            doc = pe.new_document(["Check"], num_rows=2, num_cols=2)
+            doc.sheets[0].tables[0].write("A1", 1)
+            pe.save_document(doc, probe)
+            read = get_cells(probe, [{"sheet": 0, "table": 0, "a1": "A1"}])
+            value = read.get("cells", [{}])[0].get("value")
+            result["healthy"] = str(value) in ("1", "1.0")
+            if not result["healthy"]:
+                result["error"] = f"round trip returned {value!r}, expected 1"
+    except NumbersCliError as exc:
+        result["healthy"] = False
+        result["error"] = str(exc)
+    return result

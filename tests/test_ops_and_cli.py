@@ -104,3 +104,26 @@ def test_skill_install_and_path(tmp_path):
     with pytest.raises(UsageError):
         skill.install(dest_root=tmp_path)  # refuses to overwrite
     skill.install(dest_root=tmp_path, force=True)  # unless forced
+
+
+def test_doctor_default_reports_identity_without_probing(capsys, monkeypatch):
+    # The default report must never launch Numbers; if it did, health() would run.
+    monkeypatch.setattr(
+        app_engine, "health", lambda: (_ for _ in ()).throw(AssertionError("probed by default"))
+    )
+    monkeypatch.setattr(app_engine, "numbers_app_info", lambda: {"name": "Numbers", "version": "15.3"})
+    assert cli.main(["doctor"]) == 0
+    data = json.loads(capsys.readouterr().out)["data"]
+    assert data["numbers_app_info"]["version"] == "15.3"
+    assert "app_engine_healthy" not in data
+
+
+def test_doctor_probe_runs_health_check(capsys, monkeypatch):
+    monkeypatch.setattr(
+        app_engine, "health", lambda: {"healthy": False, "error": "doc is null", "app": None}
+    )
+    monkeypatch.setattr(app_engine, "numbers_app_info", lambda: None)
+    assert cli.main(["doctor", "--probe"]) == 0
+    data = json.loads(capsys.readouterr().out)["data"]
+    assert data["app_engine_healthy"] is False
+    assert data["app_engine_error"] == "doc is null"
